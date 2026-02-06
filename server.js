@@ -5,6 +5,9 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
+import WebSocket from 'ws';
 import apiRoutes from './routes/api.js';
 
 // Get current directory for ES modules
@@ -16,11 +19,13 @@ dotenv.config({ path: join(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const HELIUS_API_KEY = process.env.HELIUS_API_KEY;
+const SOLANA_NETWORK = process.env.SOLANA_NETWORK || 'devnet';
 
 // Trust proxy is required for rate limiting behind Fly.io/Render load balancers
 app.set('trust proxy', 1);
 
-console.log('🔑 HELIUS_API_KEY loaded:', process.env.HELIUS_API_KEY ? 'Yes ✅' : 'No ❌');
+console.log('🔑 HELIUS_API_KEY loaded:', HELIUS_API_KEY ? 'Yes ✅' : 'No ❌');
 
 // Security middleware
 app.use(helmet());
@@ -52,7 +57,7 @@ app.use(cors({
 // Rate limiting - prevent abuse
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // Limit each IP to 100 requests per windowMs
+    max: 1000, // Limit each IP to 1000 requests per windowMs
     message: 'Too many requests from this IP, please try again later.'
 });
 
@@ -77,9 +82,65 @@ app.use((err, req, res, next) => {
     });
 });
 
+// Create HTTP server
+const server = createServer(app);
+
+// Create WebSocket server for proxying Solana RPC WebSocket connections
+const wss = new WebSocketServer({ server, path: '/api/rpc-ws' });
+
+wss.on('connection', (clientWs, req) => {
+    console.log('🔌 New WebSocket connection from:', req.socket.remoteAddress);
+
+    // Connect to Helius WebSocket endpoint with API key
+    const heliusWsUrl = `wss://${SOLANA_NETWORK}.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+    const heliusWs = new WebSocket(heliusWsUrl);
+
+    // Forward messages from client to Helius
+    clientWs.on('message', (message) => {
+        if (heliusWs.readyState === WebSocket.OPEN) {
+            heliusWs.send(message);
+        }
+    });
+
+    // Forward messages from Helius to client
+    heliusWs.on('message', (message) => {
+        if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(message);
+        }
+    });
+
+    // Handle Helius connection open
+    heliusWs.on('open', () => {
+        console.log('✅ Connected to Helius WebSocket');
+    });
+
+    // Handle errors
+    heliusWs.on('error', (error) => {
+        console.error('❌ Helius WebSocket error:', error.message);
+        clientWs.close();
+    });
+
+    clientWs.on('error', (error) => {
+        console.error('❌ Client WebSocket error:', error.message);
+        heliusWs.close();
+    });
+
+    // Handle disconnections
+    heliusWs.on('close', () => {
+        console.log('🔌 Helius WebSocket closed');
+        clientWs.close();
+    });
+
+    clientWs.on('close', () => {
+        console.log('🔌 Client WebSocket closed');
+        heliusWs.close();
+    });
+});
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`🚀 Wallet backend server running on port ${PORT}`);
-    console.log(`📡 Network: ${process.env.SOLANA_NETWORK || 'devnet'}`);
+    console.log(`📡 Network: ${SOLANA_NETWORK}`);
     console.log(`🔒 CORS enabled for browser extensions`);
+    console.log(`🔌 WebSocket proxy available at /api/rpc-ws`);
 });
