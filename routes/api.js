@@ -166,6 +166,9 @@ router.post('/rpc', async (req, res) => {
     try {
         const rpcUrl = `https://${SOLANA_NETWORK}.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 
+        // Log the RPC method being called for debugging
+        console.log('🔗 RPC Call:', req.body?.method || 'unknown method');
+
         const response = await fetch(rpcUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -173,6 +176,12 @@ router.post('/rpc', async (req, res) => {
         });
 
         const data = await response.json();
+
+        // Log if there's an error in the response
+        if (data.error) {
+            console.error('❌ RPC Error:', data.error);
+        }
+
         res.json(data);
     } catch (error) {
         console.error('Error proxying RPC request:', error);
