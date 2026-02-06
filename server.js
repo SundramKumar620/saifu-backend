@@ -17,6 +17,9 @@ dotenv.config({ path: join(__dirname, '.env') });
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy is required for rate limiting behind Fly.io/Render load balancers
+app.set('trust proxy', 1);
+
 console.log('🔑 HELIUS_API_KEY loaded:', process.env.HELIUS_API_KEY ? 'Yes ✅' : 'No ❌');
 
 // Security middleware

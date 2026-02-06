@@ -83,37 +83,13 @@ router.get('/sol-price', async (req, res) => {
     try {
         const url = 'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd';
         const response = await fetch(url);
+        const data = await response.json();
 
-        // Check if response is OK
-        if (!response.ok) {
-            console.error('CoinGecko API error:', response.status, response.statusText);
-            return res.status(500).json({
-                error: `CoinGecko API returned ${response.status}`,
-                price: null
-            });
-        }
-
-        // Get response text first to check if it's empty
-        const text = await response.text();
-        if (!text || text.trim() === '') {
-            console.error('CoinGecko returned empty response');
-            return res.status(500).json({
-                error: 'Empty response from CoinGecko',
-                price: null
-            });
-        }
-
-        // Parse JSON
-        const data = JSON.parse(text);
         const price = data?.solana?.usd ?? null;
-
         res.json({ price });
     } catch (error) {
-        console.error('Error fetching SOL price:', error.message);
-        res.status(500).json({
-            error: error.message,
-            price: null
-        });
+        console.error('Error fetching SOL price:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
