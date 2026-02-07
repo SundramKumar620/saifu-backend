@@ -1,5 +1,15 @@
 import express from 'express';
 import { Connection, PublicKey } from '@solana/web3.js';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get current directory for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load environment variables (needed because ES module imports are hoisted)
+dotenv.config({ path: join(dirname(__dirname), '.env') });
 
 const router = express.Router();
 
@@ -7,22 +17,13 @@ const router = express.Router();
 const HELIUS_API_KEY = process.env.HELIUS_API_KEY;
 const SOLANA_NETWORK = process.env.SOLANA_NETWORK || 'devnet';
 
-// Create Solana connection with Helius RPC or fallback to public RPC
+// Create Solana connection with Helius RPC ONLY
 const getConnection = () => {
-    let rpcUrl;
-
-    if (HELIUS_API_KEY && HELIUS_API_KEY.trim() !== '') {
-        // Use Helius RPC with API key
-        rpcUrl = `https://${SOLANA_NETWORK}.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
-        console.log('🔗 Using Helius RPC');
-    } else {
-        // Fallback to public Solana RPC
-        rpcUrl = SOLANA_NETWORK === 'mainnet-beta'
-            ? 'https://api.mainnet-beta.solana.com'
-            : 'https://api.devnet.solana.com';
-        console.log('⚠️  Using public Solana RPC (rate limited)');
+    if (!HELIUS_API_KEY || HELIUS_API_KEY.trim() === '') {
+        throw new Error('HELIUS_API_KEY is required but not set in environment variables');
     }
 
+    const rpcUrl = `https://${SOLANA_NETWORK}.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
     return new Connection(rpcUrl, 'confirmed');
 };
 
@@ -166,26 +167,35 @@ router.post('/rpc', async (req, res) => {
     try {
         const rpcUrl = `https://${SOLANA_NETWORK}.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 
-        // Log the RPC method being called for debugging
-        console.log('🔗 RPC Call:', req.body?.method || 'unknown method');
-
         const response = await fetch(rpcUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(req.body)
         });
 
+        if (!response.ok) {
+            console.error('RPC Error:', response.status, req.body?.method);
+            return res.status(response.status).json({
+                jsonrpc: '2.0',
+                error: { code: -32000, message: `HTTP ${response.status}: ${response.statusText}` },
+                id: req.body?.id || null
+            });
+        }
+
         const data = await response.json();
 
-        // Log if there's an error in the response
         if (data.error) {
-            console.error('❌ RPC Error:', data.error);
+            console.error('RPC Error:', data.error);
         }
 
         res.json(data);
     } catch (error) {
-        console.error('Error proxying RPC request:', error);
-        res.status(500).json({ error: error.message });
+        console.error('RPC proxy error:', error.message);
+        res.status(500).json({
+            jsonrpc: '2.0',
+            error: { code: -32603, message: error.message },
+            id: req.body?.id || null
+        });
     }
 });
 
