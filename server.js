@@ -29,27 +29,45 @@ console.log('🔑 HELIUS_API_KEY loaded:', HELIUS_API_KEY ? 'Yes ✅' : 'No ❌'
 app.use(helmet());
 
 // CORS configuration - allow requests from browser extension
+// CORS configuration
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://saifu-flax.vercel.app',
+    process.env.FRONTEND_URL
+].filter(Boolean); // Remove undefined/null values
+
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
+        // Allow requests with no origin (mobile apps, curl, Postman, etc.)
         if (!origin) return callback(null, true);
 
-        // Allow chrome-extension:// and moz-extension:// origins
-        if (origin.startsWith('chrome-extension://') ||
-            origin.startsWith('moz-extension://') ||
-            origin === 'http://localhost:5173' || // Vite dev server
-            origin === 'http://localhost:3000') { // Alternative dev port
+        // Allow browser extensions
+        if (origin.startsWith('chrome-extension://') || 
+            origin.startsWith('moz-extension://')) {
             return callback(null, true);
         }
 
-        // In production, log rejected origins for debugging
+        // Allow whitelisted origins
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        // Allow all Vercel preview deployments (optional - enable if needed)
+        // if (origin.endsWith('.vercel.app')) {
+        //     return callback(null, true);
+        // }
+
+        // Reject with detailed logging in production
         if (process.env.NODE_ENV === 'production') {
             console.log('⚠️  CORS rejected origin:', origin);
         }
 
         callback(new Error('Not allowed by CORS'));
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Rate limiting - prevent abuse
