@@ -65,6 +65,8 @@ router.get("/token-balances/:address", async (req, res) => {
 
     const { result } = await response.json();
 
+    console.log("HELUIS getAssetsByOwner result:", result);
+
 
 
     const tokens = (result.items || []).map(asset => ({
