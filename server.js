@@ -6,11 +6,9 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-// Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables with explicit path
 dotenv.config({ path: join(__dirname, '.env') });
 
 import apiRoutes from './routes/api.js';
@@ -35,7 +33,7 @@ const allowedOrigins = [
     'http://localhost:3000',
     'https://saifu-flax.vercel.app',
     process.env.FRONTEND_URL
-].filter(Boolean); // Remove undefined/null values
+].filter(Boolean);
 
 app.use(cors({
     origin: function (origin, callback) {
@@ -53,11 +51,6 @@ app.use(cors({
             return callback(null, true);
         }
 
-        // Allow all Vercel preview deployments (optional - enable if needed)
-        // if (origin.endsWith('.vercel.app')) {
-        //     return callback(null, true);
-        // }
-
         // Reject with detailed logging in production
         if (process.env.NODE_ENV === 'production') {
             console.log('⚠️  CORS rejected origin:', origin);
@@ -70,7 +63,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization','solana-client']
 }));
 
-// Rate limiting - prevent abuse
+// Rate limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // Limit each IP to 1000 requests per windowMs
@@ -79,18 +72,14 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-// Body parser
 app.use(express.json());
 
-// API routes
 app.use('/api', apiRoutes);
 
-// Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Error:', err.message);
     res.status(err.status || 500).json({
@@ -98,7 +87,6 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server
 app.listen(PORT, () => {
     console.log(`🚀 Wallet backend server running on port ${PORT}`);
     console.log(`📡 Network: ${SOLANA_NETWORK}`);
